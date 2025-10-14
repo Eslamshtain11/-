@@ -6,8 +6,6 @@
 
 This contains everything you need to run your app locally.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1kySRQdYZZWokL76ZHbyAM-XkV2Bjxw36
-
 ## Run Locally
 
 **Prerequisites:**  Node.js
@@ -15,6 +13,13 @@ View your app in AI Studio: https://ai.studio/apps/drive/1kySRQdYZZWokL76ZHbyAM-
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Copy `.env.example` to `.env.local` (or `.env`) and adjust the values if needed.
+   The mock AI provider runs without any keys.
 3. Run the app:
    `npm run dev`
+
+## AI Provider Configuration
+
+The application uses an AI provider adapter that defaults to a deterministic
+mock implementation. To switch to Gemini, set the environment variables
+`AI_PROVIDER=gemini` and `GEMINI_API_KEY=<your-key>`.
