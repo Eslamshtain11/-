@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { Trash2, PlusCircle } from 'lucide-react';
@@ -6,27 +7,32 @@ const ManageGroupsScreen: React.FC = () => {
   const { groups, addGroup, deleteGroup } = useData();
   const [newGroupName, setNewGroupName] = useState('');
   const [error, setError] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
 
-  const handleAddGroup = () => {
+  const handleAddGroup = async () => {
     setError('');
     if (!newGroupName.trim()) {
       setError('اسم المجموعة مينفعش يبقى فاضي.');
       return;
     }
-    if (!addGroup(newGroupName)) {
-      setError('اسم المجموعة ده موجود قبل كده.');
+    setIsAdding(true);
+    const success = await addGroup(newGroupName);
+    if (!success) {
+      // Error is now handled via an alert in the context
+      // setError('اسم المجموعة ده موجود قبل كده.');
     } else {
       setNewGroupName('');
     }
+    setIsAdding(false);
   };
 
-  const handleDeleteGroup = (groupName: string) => {
+  const handleDeleteGroup = (groupId: string, groupName: string) => {
     if (groups.length <= 1) {
         alert("لازم يكون فيه مجموعة واحدة على الأقل.");
         return;
     }
     if (window.confirm(`متأكد إنك عايز تمسح مجموعة "${groupName}"؟`)) {
-        deleteGroup(groupName);
+        deleteGroup(groupId);
     }
   }
 
@@ -50,7 +56,8 @@ const ManageGroupsScreen: React.FC = () => {
             />
             <button
               onClick={handleAddGroup}
-              className="bg-brand-gold text-brand-blue font-bold p-3 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition shadow-md"
+              disabled={isAdding}
+              className="bg-brand-gold text-brand-blue font-bold p-3 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition shadow-md disabled:bg-gray-500"
             >
               <PlusCircle size={20} />
             </button>
@@ -62,12 +69,12 @@ const ManageGroupsScreen: React.FC = () => {
           <h3 className="text-xl font-bold text-brand-gold mb-4">المجموعات الحالية ({groups.length})</h3>
           <div className="max-h-80 overflow-y-auto space-y-2 pr-2">
             {groups.length > 0 ? groups.map(group => (
-              <div key={group} className="flex justify-between items-center bg-brand-blue p-3 rounded-lg">
-                <span className="text-brand-light">{group}</span>
+              <div key={group.id} className="flex justify-between items-center bg-brand-blue p-3 rounded-lg">
+                <span className="text-brand-light">{group.name}</span>
                 <button
-                  onClick={() => handleDeleteGroup(group)}
+                  onClick={() => handleDeleteGroup(group.id, group.name)}
                   className="text-red-500 hover:text-red-400 transition"
-                  aria-label={`حذف مجموعة ${group}`}
+                  aria-label={`حذف مجموعة ${group.name}`}
                 >
                   <Trash2 size={20} />
                 </button>

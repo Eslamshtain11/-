@@ -1,3 +1,4 @@
+
 export interface Payment {
   id: string;
   studentName: string;
@@ -9,10 +10,15 @@ export interface Payment {
 export type NewPayment = Omit<Payment, 'id'>;
 
 export interface User {
-  name: string;
+  id: string;
   phone: string;
-  password: string; // Stored as plain text for this simple app
-  guestCode?: string;
+  name: string;
+  guestCode?: string | null;
+}
+
+export interface Group {
+    id: string;
+    name: string;
 }
 
 

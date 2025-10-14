@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { Payment } from '../types';
@@ -24,7 +25,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, paymentToEdit }) => 
     } else {
         // Reset form for new entry
         setStudentName('');
-        setGroupName(groups[0] || '');
+        setGroupName(groups[0]?.name || '');
         setAmount('');
         setDate(new Date().toISOString().split('T')[0]);
     }
@@ -85,7 +86,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onClose, paymentToEdit }) => 
           className="w-full bg-brand-blue border border-brand-secondary rounded-lg p-3 focus:ring-2 focus:ring-brand-gold focus:border-brand-gold outline-none transition text-white"
         >
           <option value="" disabled>-- اختر مجموعة --</option>
-          {groups.map(g => <option key={g} value={g}>{g}</option>)}
+          {groups.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
         </select>
          {renderError('groupName')}
       </div>

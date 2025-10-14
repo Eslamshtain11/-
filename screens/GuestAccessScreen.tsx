@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Copy, Check, RefreshCw } from 'lucide-react';
 
 const GuestAccessScreen: React.FC = () => {
   const { currentUser, generateGuestCode } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [guestCode, setGuestCode] = useState(currentUser?.guestCode);
 
-  // The guest code should be part of the currentUser object from AuthContext
-  const guestCode = currentUser?.guestCode;
+  useEffect(() => {
+      setGuestCode(currentUser?.guestCode);
+  }, [currentUser?.guestCode]);
 
   const handleCopy = () => {
     if (guestCode) {
@@ -17,9 +20,10 @@ const GuestAccessScreen: React.FC = () => {
     }
   };
 
-  const handleGenerateNewCode = () => {
+  const handleGenerateNewCode = async () => {
     if (window.confirm("متأكد إنك عايز تعمل كود جديد؟ الكود القديم هيتلغي.")) {
-        generateGuestCode();
+        const newCode = await generateGuestCode();
+        setGuestCode(newCode);
     }
   };
 

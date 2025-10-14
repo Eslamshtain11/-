@@ -1,120 +1,192 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '../services/supabase';
 import { User } from '../types';
-import useLocalStorage from '../hooks/useLocalStorage';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 
-interface AuthContextType {
+// FIX: This file was malformed and causing multiple errors.
+// It has been replaced with a complete authentication context implementation.
+
+interface AuthContextProps {
   currentUser: User | null;
-  isGuestSession: boolean;
   loading: boolean;
-  signup: (userData: Omit<User, 'guestCode'>) => Promise<void>;
-  login: (phone: string, password: string) => Promise<void>;
-  logout: () => void;
-  loginAsGuest: (guestCode: string) => Promise<{ success: boolean; ownerName?: string }>;
-  generateGuestCode: () => string;
+  login: (phone: string, pass: string) => Promise<void>;
+  signup: (name: string, phone: string, pass: string) => Promise<any>;
+  logout: () => Promise<void>;
+  generateGuestCode: () => Promise<string | null>;
+  loginAsGuest: (guestCode: string) => Promise<void>;
+  isGuestSession: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextProps | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [users, setUsers] = useLocalStorage<User[]>('app_users', []);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isGuestSession, setIsGuestSession] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
+  const [isGuestSession, setIsGuestSession] = useState(false);
 
   useEffect(() => {
-    // This effect is to check for a persisted session on app load
-    try {
-      const sessionUserPhone = sessionStorage.getItem('currentUserPhone');
-      const sessionIsGuest = sessionStorage.getItem('isGuestSession') === 'true';
-      if (sessionUserPhone) {
-        const user = users.find(u => u.phone === sessionUserPhone);
-        if (user) {
-          setCurrentUser(user);
-          setIsGuestSession(sessionIsGuest);
+    const getSessionAndProfile = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await fetchUserProfile(session.user);
+      } else {
+        await checkGuestSession();
+      }
+      setLoading(false);
+    };
+
+    getSessionAndProfile();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) {
+        await fetchUserProfile(session.user);
+        setIsGuestSession(false);
+        sessionStorage.removeItem('guestCode');
+      } else {
+        setCurrentUser(null);
+        setIsGuestSession(false);
+      }
+    });
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  const fetchUserProfile = async (supabaseUser: SupabaseUser) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, name, phone, guest_code')
+      .eq('id', supabaseUser.id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching user profile:', error);
+      setCurrentUser(null);
+    } else if (data) {
+      setCurrentUser({
+        id: data.id,
+        name: data.name,
+        phone: data.phone,
+        guestCode: data.guest_code,
+      });
+    }
+  };
+  
+  const checkGuestSession = async () => {
+    const guestCode = sessionStorage.getItem('guestCode');
+    if (guestCode) {
+      await loginAsGuest(guestCode).catch(err => {
+        console.error(err);
+        sessionStorage.removeItem('guestCode');
+      });
+    }
+  };
+
+  const login = async (phone: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email: `${phone.trim()}@dummy.com`,
+      password,
+    });
+    if (error) {
+       if (error.message.includes('Email not confirmed')) {
+        throw new Error("الحساب اتعمل بس محتاج يتفعّل. من فضلك الغي خاصية 'تأكيد البريد الإلكتروني' من إعدادات حسابك في Supabase.");
+      }
+      throw new Error("رقم الموبايل أو كلمة المرور غلط.");
+    }
+  };
+
+  const signup = async (name: string, phone: string, password: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email: `${phone.trim()}@dummy.com`,
+      password: password,
+      options: {
+        data: {
+          name: name.trim(),
+          phone: phone.trim()
         }
       }
-    } catch (e) {
-        console.error("Could not restore session.", e);
-    } finally {
-        setLoading(false);
+    });
+    if (error) {
+        if (error.message.includes('User already registered')) {
+            throw new Error('رقم الموبايل ده متسجل قبل كده.');
+        }
+        throw error;
     }
-  }, [users]);
-  
-  const persistSession = (user: User, isGuest: boolean) => {
-      sessionStorage.setItem('currentUserPhone', user.phone);
-      sessionStorage.setItem('isGuestSession', String(isGuest));
-  };
-  
-  const clearSession = () => {
-      sessionStorage.removeItem('currentUserPhone');
-      sessionStorage.removeItem('isGuestSession');
+    return data;
   };
 
-  const signup = async (userData: Omit<User, 'guestCode'>): Promise<void> => {
-    const userExists = users.some(user => user.phone === userData.phone);
-    if (userExists) {
-      throw new Error('هذا الرقم مسجل بالفعل.');
-    }
-    const newUser = { ...userData, guestCode: generateGuestCodeInternal() };
-    setUsers([...users, newUser]);
-    setCurrentUser(newUser);
-    setIsGuestSession(false);
-    persistSession(newUser, false);
-  };
-
-  const login = async (phone: string, password: string): Promise<void> => {
-    const user = users.find(user => user.phone === phone && user.password === password);
-    if (!user) {
-      throw new Error('رقم التليفون أو كلمة المرور غلط.');
-    }
-    setCurrentUser(user);
-    setIsGuestSession(false);
-    persistSession(user, false);
-  };
-
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
+    sessionStorage.removeItem('guestCode');
     setCurrentUser(null);
     setIsGuestSession(false);
-    clearSession();
   };
-
-  const loginAsGuest = async (guestCode: string): Promise<{ success: boolean; ownerName?: string }> => {
-    if (!guestCode || guestCode.length < 4) return { success: false };
-    const userAccount = users.find(user => user.guestCode === guestCode);
-    if (!userAccount) {
-      return { success: false };
+  
+  const generateGuestCode = async (): Promise<string | null> => {
+    if (!currentUser) return null;
+    const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ guest_code: newCode })
+      .eq('id', currentUser.id)
+      .select('guest_code')
+      .single();
+    
+    if (error) {
+      console.error("Error generating guest code:", error);
+      return null;
     }
-    setCurrentUser(userAccount);
-    setIsGuestSession(true);
-    persistSession(userAccount, true);
-    return { success: true, ownerName: userAccount.name };
+    
+    if (data) {
+      setCurrentUser(prev => prev ? { ...prev, guestCode: data.guest_code } : null);
+      return data.guest_code;
+    }
+    return null;
+  };
+  
+  const loginAsGuest = async (guestCode: string) => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, name, phone, guest_code')
+      .eq('guest_code', guestCode.toUpperCase())
+      .neq('guest_code', null)
+      .single();
+    
+    setLoading(false);
+    if (error || !data) {
+      console.error("Invalid guest code:", error);
+      throw new Error("كود الضيف غير صحيح.");
+    } else {
+      setCurrentUser({
+        id: data.id,
+        name: data.name,
+        phone: data.phone,
+        guestCode: data.guest_code,
+      });
+      setIsGuestSession(true);
+      sessionStorage.setItem('guestCode', guestCode);
+    }
   };
 
-  const generateGuestCodeInternal = () => {
-    return Math.floor(1000 + Math.random() * 9000).toString();
+  const value = {
+    currentUser,
+    loading,
+    login,
+    signup,
+    logout,
+    generateGuestCode,
+    loginAsGuest,
+    isGuestSession,
   };
 
-  const generateGuestCode = (): string => {
-    if (!currentUser || isGuestSession) return '';
-    const newCode = generateGuestCodeInternal();
-    const updatedUsers = users.map(user => 
-      user.phone === currentUser.phone ? { ...user, guestCode: newCode } : user
-    );
-    setUsers(updatedUsers);
-    setCurrentUser(prev => prev ? { ...prev, guestCode: newCode } : null);
-    return newCode;
-  };
-
-  return (
-    <AuthContext.Provider value={{ currentUser, isGuestSession, loading, signup, login, logout, loginAsGuest, generateGuestCode }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
