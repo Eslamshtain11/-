@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useEffect, useState } from 'react';
+import React, { createContext, useContext, ReactNode, useEffect } from 'react';
 import { Payment, NewPayment } from '../types';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { useAuth } from './AuthContext';
@@ -19,6 +19,8 @@ interface DataContextProps {
   groups: string[];
   addGroup: (groupName: string) => boolean;
   deleteGroup: (groupName: string) => void;
+  reminderPeriod: number;
+  setReminderPeriod: (days: number) => void;
 }
 
 const DataContext = createContext<DataContextProps | undefined>(undefined);
@@ -27,19 +29,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const { currentUser } = useAuth();
   const [payments, setPayments] = useLocalStorage<Payment[]>(`payments_${currentUser?.phone}`, []);
   const [groups, setGroups] = useLocalStorage<string[]>(`groups_${currentUser?.phone}`, ['3 ثانوي', '2 ثانوي', '1 ثانوي']);
+  const [reminderPeriod, setReminderPeriod] = useLocalStorage<number>(`reminderPeriod_${currentUser?.phone}`, 7);
 
   // This effect will re-initialize the state when the user logs in/out
   useEffect(() => {
     if (currentUser) {
       const userPayments = localStorage.getItem(`payments_${currentUser.phone}`);
       const userGroups = localStorage.getItem(`groups_${currentUser.phone}`);
+      const userReminderPeriod = localStorage.getItem(`reminderPeriod_${currentUser.phone}`);
+
       setPayments(userPayments ? JSON.parse(userPayments) : []);
       setGroups(userGroups ? JSON.parse(userGroups) : ['3 ثانوي', '2 ثانوي', '1 ثانوي']);
+      setReminderPeriod(userReminderPeriod ? JSON.parse(userReminderPeriod) : 7);
     } else {
       setPayments([]);
       setGroups([]);
+      setReminderPeriod(7);
     }
-  }, [currentUser, setPayments, setGroups]);
+  }, [currentUser, setPayments, setGroups, setReminderPeriod]);
 
 
   const addPayment = (payment: NewPayment) => {
@@ -70,8 +77,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Optional: Also remove payments associated with this group
     // setPayments(prev => prev.filter(p => p.groupName !== groupName));
   };
+  
+  const handleSetReminderPeriod = (days: number) => {
+    if (!isNaN(days) && days >= 0) {
+      setReminderPeriod(days);
+    }
+  };
 
-  const value = { payments, addPayment, updatePayment, deletePayment, groups, addGroup, deleteGroup };
+  const value = { payments, addPayment, updatePayment, deletePayment, groups, addGroup, deleteGroup, reminderPeriod, setReminderPeriod: handleSetReminderPeriod };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };
